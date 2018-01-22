@@ -1,0 +1,112 @@
+---
+title: "Analysis Biblical Proportions"
+author: "Batul Arsiwala"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(root.dir = 'C:/Users/Murtaza/Desktop/SCU NOTES/Machine Learning/Data files',echo = TRUE)
+```
+
+
+# Reading the Bible text
+
+*Reading the file and storing each verse in a text array.*
+```{r}
+text = readLines("C:/Users/Murtaza/Desktop/SCU NOTES/Machine Learning/Data files/ascii_bible.txt")
+book_list = list()
+vector_verse = c()
+in_verse = 0
+book = 0
+string = ""
+for(i in 1:(length(text))){
+  if (grepl("\\d\\d\\d:\\d\\d\\d",text[i]) == TRUE){
+    if (in_verse == 1){
+      vector_verse = c(vector_verse,string)
+      book_list[[book]] = c(vector_verse,string)
+    }
+    string = paste(as.character(book),text[i],sep ="_")
+    in_verse = 1
+  }else if (text[i] == ""){
+      if (in_verse == 1) {
+        vector_verse = c(vector_verse,string)
+        book_list[[book]] = c(vector_verse,string)
+      }
+      in_verse = 0
+  }else if (grepl("Book\\s*\\d+",text[i])== TRUE){
+      book = book+1
+  }else{
+    text[i] = trimws(text[i],"l")
+    string = paste(string,text[i])
+  }
+}
+vector_verse = c(vector_verse,string)
+vector_verse[1:20]
+```
+
+##How many verses are there in total? 
+```{r}
+length(vector_verse)
+```
+
+##Each verse has the number "CCC:VVV" where CCC is the chapter number and VVV is the verse number.So how many chapters are there? 
+```{r}
+ch_regex = regexpr("\\d+_\\d\\d\\d:\\d\\d\\d",vector_verse)
+chapter_1 = regmatches(vector_verse,ch_regex)
+chapter = sapply(strsplit(chapter_1, ":"), "[", 1)
+uni_chapter = unique(chapter)
+length(uni_chapter) # 1189 chapters
+```
+
+## Let's extract an array for the verse numbers, and also one for the verse text.
+```{r}
+# Extracting array of verse numbers
+verse = sapply(strsplit(chapter_1, ":"), "[", 2)
+
+#Extracting array of verse text
+verse_text = sub("\\d+_\\d\\d\\d:\\d\\d\\d\\s+", "", vector_verse)
+```
+
+## How many unique words are there in the bible?
+```{r}
+library(tm)
+verse_text = tolower(verse_text)
+text_corpus = Corpus(VectorSource(verse_text))
+temp_verse = tm_map(text_corpus,removePunctuation)
+verse_tdm = TermDocumentMatrix(temp_verse,control=list(minWordLength=1))
+print(verse_tdm ) # 12646 unique words
+```
+
+## Removing all the stopwords. Now how many unique terms are there? 
+```{r}
+temp_verse_s = tm_map(temp_verse,removeWords,stopwords("english"))
+verse_tdm_s = TermDocumentMatrix(temp_verse_s,control=list(minWordLength=1))
+print(verse_tdm_s)# 12550 unique words
+```
+
+## Now stemming the text, to remove multiplicity of similar words of the same root. 
+```{r}
+library(SnowballC)
+verse_stem = tm_map(temp_verse_s, stemDocument)
+```
+
+## How many distinct words are there in the bible, after stemming?
+```{r}
+verse_tdm_stem = TermDocumentMatrix(verse_stem,control=list(minWordLength=1))
+print(verse_tdm_stem)# 9120 distict words
+```
+
+## The 50 most common words in the bible:
+```{r}
+library(slam)
+verse_sum = rollup(verse_tdm_stem, 2, na.rm=TRUE, FUN = sum)
+verse_sum = as.matrix(verse_sum)
+top_words_sum = apply(verse_sum,2,sort,decreasing = TRUE)
+top_words_name= rownames(top_words_sum)
+top_words_name[1:50]
+```
+
+## Wordcloud of the top 100 words in the bible. 
+```{r}
+library(wordcloud)
+wordcloud(top_words_name[1:100],top_words_sum[1:100,])
+```
